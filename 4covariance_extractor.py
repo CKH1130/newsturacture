@@ -4,6 +4,21 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 
+ASSETS = [
+    "NVDA", "AMD", "QCOM", "AMAT", "ASML",
+    "2330.TW", "2454.TW", "3711.TW", "6488.TWO",
+    "8035.T", "6857.T", "4063.T",
+    "005930.KS", "000660.KS", "042700.KS"
+]
+
+def clean_returns(df_returns):
+    df_returns = df_returns[ASSETS].copy()
+    df_returns = df_returns.replace([np.inf, -np.inf], np.nan)
+    missing_before = int(df_returns.isna().sum().sum())
+    if missing_before:
+        print(f"[Data Check] 偵測到 {missing_before} 個缺失/無限值，已以 0.0 補值。")
+    return df_returns.fillna(0.0)
+
 def main():
     print("=== 啟動 60 日滾動共變異數 (Σ) 萃取引擎 ===\n")
     
@@ -13,15 +28,10 @@ def main():
     
     # 🚨 學術防禦：嚴格鎖定這 15 檔股票的「絕對順序」
     # 這非常重要！如果矩陣的欄位順序亂掉，量子演算法選出來的股票就會對應錯誤
-    assets = [
-        "NVDA", "AMD", "QCOM", "AMAT", "ASML",
-        "2330.TW", "2454.TW", "3711.TW", "6488.TWO",
-        "8035.T", "6857.T", "4063.T",
-        "005930.KS", "000660.KS", "042700.KS"
-    ]
+    assets = ASSETS
     
     # 強制將 DataFrame 的欄位排序對齊我們的標準名單
-    df_returns = df_returns[assets]
+    df_returns = clean_returns(df_returns)
     
     # 2. 我們選定的 5 大代表日
     target_dates = [
@@ -56,6 +66,9 @@ def main():
         
         # 計算共變異數矩陣 (Covariance Matrix)
         cov_matrix = historical_60_days.cov()
+        if not np.isfinite(cov_matrix.values).all():
+            print(f"  ❌ 警告：日期 {date_str} 的共變異數矩陣含非有限值，跳過。")
+            continue
         
         # 將 DataFrame 轉為二維陣列 (List of Lists)，以便存入 JSON
         sigma_dict[date_str] = cov_matrix.values.tolist()
@@ -65,7 +78,7 @@ def main():
     # 4. 存檔輸出
     output_file = "sigma_matrices.json"
     with open(output_file, "w") as f:
-        json.dump(sigma_dict, f, indent=4)
+        json.dump(sigma_dict, f, indent=4, allow_nan=False)
         
     print(f"\n🎉 大功告成！5 個代表日的共變異數矩陣 (Σ) 已成功儲存至 '{output_file}'")
 

@@ -1,13 +1,19 @@
 import pandas as pd
 import numpy as np
 import json
-import os
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 import warnings
 warnings.filterwarnings('ignore')
+
+ASSETS = [
+    "NVDA", "AMD", "QCOM", "AMAT", "ASML",
+    "2330.TW", "2454.TW", "3711.TW", "6488.TWO",
+    "8035.T", "6857.T", "4063.T",
+    "005930.KS", "000660.KS", "042700.KS"
+]
 
 def create_sequences(data, seq_length=60):
     """
@@ -31,12 +37,26 @@ def build_lstm_model(seq_length, num_features):
     model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
     return model
 
+def clean_returns(df_returns):
+    """
+    將跨市場休市造成的缺值轉成可訓練的完整報酬率表。
+    報酬率缺值以 0 補值，代表該資產在該日沒有可觀測價格變動。
+    """
+    df_returns = df_returns[ASSETS].copy()
+    df_returns = df_returns.replace([np.inf, -np.inf], np.nan)
+    missing_before = int(df_returns.isna().sum().sum())
+    if missing_before:
+        print(f"[Data Check] 偵測到 {missing_before} 個缺失/無限值，已以 0.0 補值。")
+    df_returns = df_returns.fillna(0.0)
+    return df_returns
+
 def main():
     print("=== 啟動 LSTM 預期報酬 (μ) 預測引擎 ===")
     
     # 1. 讀取真實歷史報酬率
     df_returns = pd.read_csv("chip4_usd_returns.csv", index_col="Date", parse_dates=True)
-    assets = df_returns.columns.tolist()
+    df_returns = clean_returns(df_returns)
+    assets = ASSETS
     
     # 2. 我們在上一步嚴格篩選出的 5 大代表日
     target_dates = [
@@ -66,6 +86,9 @@ def main():
         # 3. 資料正規化 (LSTM 對數值範圍敏感)
         scaler = MinMaxScaler(feature_range=(-1, 1))
         scaled_data = scaler.fit_transform(historical_data.values)
+        if not np.isfinite(scaled_data).all():
+            print(f"  -> 警告: {target_date} 的訓練資料仍含非有限值，跳過。")
+            continue
         
         # 4. 製作特徵序列 (過去 60 天預測明天)
         seq_length = 60
@@ -86,6 +109,9 @@ def main():
         
         # 將預測結果反轉回真實的報酬率百分比
         actual_prediction = scaler.inverse_transform(scaled_prediction)[0]
+        if not np.isfinite(actual_prediction).all():
+            print(f"  -> 警告: {target_date} 的 LSTM 預測含非有限值，跳過。")
+            continue
         
         # 存入字典
         mu_vector = {assets[i]: float(actual_prediction[i]) for i in range(len(assets))}
@@ -96,7 +122,7 @@ def main():
     # 7. 儲存成 JSON 檔供 QUBO 模型使用
     output_file = "lstm_predicted_mu.json"
     with open(output_file, 'w') as f:
-        json.dump(predicted_mu_dict, f, indent=4)
+        json.dump(predicted_mu_dict, f, indent=4, allow_nan=False)
         
     print(f"\n🎉 恭喜！所有代表日的預期報酬 (μ) 已成功匯出至 '{output_file}'")
 
