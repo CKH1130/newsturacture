@@ -1,10 +1,15 @@
 import pandas as pd
 import numpy as np
+import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # === 參數設定 ===
 # 設定回測期間 (調倉日後 21 個交易日，約 1 個月)
@@ -26,14 +31,37 @@ PLOT_STYLES = {
 
 # === 投資組合輸入區 (請替換為您各階段選出的真實名單) ===
 # 版本 A：不放 Benchmark，聚焦求解器之間的樣本外績效比較
-portfolios_20260408 = {
-    "SA/BF (古典絕對最佳)": ['ASML', '2330.TW', '6488.TWO', '4063.T', '042700.KS'],
-    "QAOA (IBM真機/硬體雜訊)": ['NVDA', '2330.TW', '8035.T', '000660.KS', 'ASML'] # 替換成您真機的結果
+portfolios_20190513 = {  # 極端大跌日
+    "SA/BF (古典絕對最佳)": ['ASML', '2454.TW', '6488.TWO', '6857.T', '000660.KS'],
+    "QAOA (IBM真機/硬體雜訊)": ['AMAT', '6488.TWO', '042700.KS']
 }
 
-# 若要跑其他天 (例如 2019-05-13)，可依樣畫葫蘆建立字典
+portfolios_20190619 = {  # 極端大漲日
+    "SA/BF (古典絕對最佳)": ['ASML', '2330.TW', '3711.TW', '6857.T'],
+    "QAOA (IBM真機/硬體雜訊)": ['AMD', 'QCOM', '8035.T', '4063.T']
+}
+
+portfolios_20190624 = {  # 平穩日
+    "SA/BF (古典絕對最佳)": ['ASML', '2330.TW', '3711.TW', '4063.T', '042700.KS'],
+    "QAOA (IBM真機/硬體雜訊)": ['NVDA', 'AMD', 'QCOM', 'ASML', '6488.TWO', '6857.T', '042700.KS']
+}
+
+portfolios_20200304 = {  # 高波動日
+    "SA/BF (古典絕對最佳)": ['2454.TW', '6488.TWO', '6857.T', '042700.KS'],
+    "QAOA (IBM真機/硬體雜訊)": ['AMD', '3711.TW', '8035.T', '4063.T', '005930.KS']
+}
+
+portfolios_20260408 = {
+    "SA/BF (古典絕對最佳)": ['AMD', '2330.TW', '6488.TWO', '8035.T', '4063.T', '005930.KS'],
+    "QAOA (IBM真機/硬體雜訊)": ['3711.TW', '6857.T'] # 替換成您真機的結果
+}
+
 target_dates = {
-    "2026-04-08": portfolios_20260408
+    "2019-05-13": portfolios_20190513,  # 極端大跌日
+    "2019-06-19": portfolios_20190619,  # 極端大漲日
+    "2019-06-24": portfolios_20190624,  # 平穩日
+    "2020-03-04": portfolios_20200304,  # 高波動日
+    "2026-04-08": portfolios_20260408   # 事件衝擊日
 }
 
 def calculate_metrics(daily_returns, portfolio_name):
@@ -99,6 +127,8 @@ def main():
         print("找不到 'chip4_usd_returns.csv'，請確認檔案是否存在。")
         return
 
+    all_metrics = []
+
     # 2. 針對每個調倉日進行回測
     for target_date_str, portfolios in target_dates.items():
         print(f"📅 正在執行調倉日: {target_date_str} 之回測 (期間: 往後 {OOS_DAYS} 個交易日)")
@@ -128,7 +158,9 @@ def main():
             
             # 算指標
             metrics = calculate_metrics(port_daily_return, name)
+            metrics["Date"] = target_date_str
             metrics_list.append(metrics)
+            all_metrics.append(metrics)
             
             # 畫累積報酬走勢圖
             cum_wealth = (1 + port_daily_return).cumprod() * 100 # 基期 100
@@ -141,6 +173,11 @@ def main():
                 markersize=5,
                 **style
             )
+
+        if not metrics_list:
+            plt.close()
+            print(f"⚠️ 警告: {target_date_str} 沒有任何可回測的投資組合，請先填入 portfolios。")
+            continue
         
         # === 畫圖設定 (符合論文格式) ===
         plt.title(f"Solver Portfolio Out-of-sample Cumulative Wealth (Rebalance Date: {target_date_str})", fontsize=14, fontweight='bold')
@@ -163,6 +200,19 @@ def main():
         print(f"📋 表三：各求解器投資組合之樣本外財務績效比較 (基準日: {target_date_str})")
         print("="*80)
         print(format_markdown_table(df_metrics.columns.tolist(), df_metrics.values.tolist()))
+        print("="*80 + "\n")
+
+    if all_metrics:
+        df_all_metrics = pd.DataFrame(all_metrics)
+        cols = ["Date"] + [col for col in df_all_metrics.columns if col != "Date"]
+        df_all_metrics = df_all_metrics[cols]
+        df_all_metrics.to_csv("backtest_metrics_all_dates.csv", index=False, encoding="utf-8-sig")
+
+        print("\n" + "="*80)
+        print("📋 五個事件日之樣本外財務績效總表")
+        print("="*80)
+        print(format_markdown_table(df_all_metrics.columns.tolist(), df_all_metrics.values.tolist()))
+        print("總表已儲存為: backtest_metrics_all_dates.csv")
         print("="*80 + "\n")
 
 if __name__ == "__main__":
