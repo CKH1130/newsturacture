@@ -1,3 +1,4 @@
+import csv
 import json
 import numpy as np
 from qiskit_optimization import QuadraticProgram
@@ -5,19 +6,19 @@ from qiskit_optimization.converters import QuadraticProgramToQubo
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
 from qiskit_algorithms import QAOA
 from qiskit_algorithms.optimizers import COBYLA
+import warnings
+
+warnings.filterwarnings("ignore")
+
 try:
     from qiskit_aer import AerSimulator
-    from qiskit_aer.primitives import SamplerV2 as Sampler
+    from qiskit_aer.primitives import SamplerV2 as AerSampler
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+    USE_AER = True
 except ImportError:
-    AerSimulator = None
-    generate_preset_pass_manager = None
-    try:
-        from qiskit.primitives import StatevectorSampler as Sampler
-    except ImportError:
-        from qiskit.primitives import Sampler
-import warnings
-warnings.filterwarnings('ignore')
+    from qiskit.primitives import StatevectorSampler as AerSampler
+    USE_AER = False
+
 
 ASSETS = [
     "NVDA", "AMD", "QCOM", "AMAT", "ASML",
@@ -26,118 +27,331 @@ ASSETS = [
     "005930.KS", "000660.KS", "042700.KS"
 ]
 
+TARGET_DATES = [
+    "2019-05-13",
+    "2019-06-19",
+    "2019-06-24",
+    "2020-03-04",
+    "2026-04-08",
+]
+
+BRUTE_FORCE_ENERGY_BY_DATE = {
+    "2019-05-13": -0.024647691792737625,
+    "2019-06-19": -0.007833811953372419,
+    "2019-06-24": -0.01249175895072697,
+    "2020-03-04": -0.004361821255456643,
+    "2026-04-08": 0.0012550100272338948,
+}
+
+
 def load_json_data(filepath):
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         return json.load(f)
 
-def build_chip4_qubo(mu, sigma, lmbda=0.5, p1=100, p2=100, p3=10):
-    """將參數轉換為 Qiskit 的 QuadraticProgram"""
+
+def build_inputs_for_date(date, mu_data, sigma_data, assets):
+    if date not in mu_data:
+        raise ValueError(f"mu_data 找不到日期 {date}")
+    if date not in sigma_data:
+        raise ValueError(f"sigma_data 找不到日期 {date}")
+
+    missing_mu = [ticker for ticker in assets if ticker not in mu_data[date]]
+    if missing_mu:
+        raise ValueError(f"mu 缺少 ticker: {missing_mu}")
+
+    mu = np.array([mu_data[date][ticker] for ticker in assets], dtype=float)
+    sigma = np.array(sigma_data[date], dtype=float)
+
+    if sigma.shape != (len(assets), len(assets)):
+        raise ValueError(f"Sigma 矩陣形狀錯誤: {sigma.shape}")
+
+    if not np.isfinite(mu).all():
+        bad_tickers = [assets[i] for i, value in enumerate(mu) if not np.isfinite(value)]
+        raise ValueError(f"mu 含非有限值: {bad_tickers}")
+
+    if not np.isfinite(sigma).all():
+        bad_count = int((~np.isfinite(sigma)).sum())
+        raise ValueError(f"Sigma 含 {bad_count} 個非有限值")
+
+    return mu, sigma
+
+
+def build_chip4_qubo(mu, sigma, lmbda=0.5, p1=50.0, p3=10.0):
     qp = QuadraticProgram(name="Chip4_QAOA")
-    
     assets = ASSETS
-    
-    # 宣告二元變數
+
     for asset in assets:
         qp.binary_var(name=asset)
-        
-    # 1. 基礎目標函數 (H_rr)
+
     linear = {assets[i]: -(1 - lmbda) * mu[i] for i in range(len(assets))}
     quadratic = {}
+
     for i in range(len(assets)):
         for j in range(len(assets)):
             quadratic[(assets[i], assets[j])] = lmbda * sigma[i][j]
+
+    dependencies = [
+        ("NVDA", "2330.TW"),
+        ("AMD", "2330.TW"),
+        ("2330.TW", "ASML")
+    ]
+
+    for dep, relies_on in dependencies:
+        linear[dep] = linear.get(dep, 0.0) + p3
+        key = (dep, relies_on)
+        quadratic[key] = quadratic.get(key, 0.0) - p3
+
     qp.minimize(linear=linear, quadratic=quadratic)
-    
-    # 2. 持股數限制 (P1: K=5)
-    qp.linear_constraint(linear={a: 1 for a in assets}, sense='==', rhs=5, name='Card_5')
-    
-    # 3. 市場配置限制 (P2)
+
     markets = {
         "US": (["NVDA", "AMD", "QCOM", "AMAT", "ASML"], 1),
         "TW": (["2330.TW", "2454.TW", "3711.TW", "6488.TWO"], 2),
         "JP": (["8035.T", "6857.T", "4063.T"], 1),
         "KR": (["005930.KS", "000660.KS", "042700.KS"], 1)
     }
-    for mkt, (tickers, req) in markets.items():
-        qp.linear_constraint(linear={t: 1 for t in tickers}, sense='==', rhs=req, name=f'Mkt_{mkt}')
-        
-    # 4. 供應鏈依賴懲罰 (P3)
-    dependencies = [("NVDA", "2330.TW"), ("AMD", "2330.TW"), ("2330.TW", "ASML")]
-    obj = qp.objective
-    for dep, relies_on in dependencies:
-        obj.linear[dep] += p3
-        obj.quadratic[dep, relies_on] = obj.quadratic[dep, relies_on] - p3
 
-    # 將 Quadratic Program 轉換為無限制的 QUBO
-    conv = QuadraticProgramToQubo(penalty=p1) # 用極大值 P1 轉換等式限制
-    qubo = conv.convert(qp)
+    for market_name, (tickers, required_count) in markets.items():
+        qp.linear_constraint(
+            linear={ticker: 1 for ticker in tickers},
+            sense="==",
+            rhs=required_count,
+            name=f"Mkt_{market_name}"
+        )
+
+    converter = QuadraticProgramToQubo(penalty=p1)
+    qubo = converter.convert(qp)
+
     return qubo, assets
 
-def main():
-    print("=== 啟動 IBM Qiskit QAOA 量子求解引擎 ===\n")
-    
-    # 讀取資料
-    mu_data = load_json_data("lstm_predicted_mu.json")
-    sigma_data = load_json_data("sigma_matrices.json")
-    
-    # 我們先拿「事件衝擊日」來測試量子演算法
-    target_date = "2026-04-08"
-    print(f"👉 載入調倉日: {target_date} 之參數...")
-    
-    mu_dict = mu_data[target_date]
-    sigma = sigma_data[target_date]
-    mu = [mu_dict[ticker] for ticker in ASSETS]
-    
-    # 建立 QUBO 模型
-    qubo_model, assets = build_chip4_qubo(mu, sigma, lmbda=0.5, p3=10)
-    print(f"👉 QUBO 模型轉換完畢 (總變數含 Slack variables: {qubo_model.get_num_vars()})")
-    
-    # ==========================================
-    # 核心：設定 QAOA 量子演算法
-    # ==========================================
-    print("\n👉 正在初始化 QAOA (p=1) 與古典優化器 COBYLA...")
-    
-    # p=1: 這是您論文設定的「NISQ 時代實務深度」
-    # 優先使用 Aer 的 C++ 模擬後端；新版 Aer 需要先 transpile QAOA instruction
-    if AerSimulator is not None:
+
+def calculate_original_energy(selected_tickers, mu, sigma, assets, lmbda=0.5, p3=10.0):
+    x = np.zeros(len(assets))
+
+    for ticker in selected_tickers:
+        idx = assets.index(ticker)
+        x[idx] = 1
+
+    risk = float(x.T @ sigma @ x)
+    expected_return = float(mu.T @ x)
+    h_rr = lmbda * risk - (1 - lmbda) * expected_return
+
+    dependencies = [
+        ("NVDA", "2330.TW"),
+        ("AMD", "2330.TW"),
+        ("2330.TW", "ASML")
+    ]
+
+    violations = 0
+    for dep, relies_on in dependencies:
+        if dep in selected_tickers and relies_on not in selected_tickers:
+            violations += 1
+
+    h_dep = p3 * violations
+    total_energy = h_rr + h_dep
+
+    return total_energy, risk, expected_return, violations
+
+
+def build_qaoa_optimizer(date):
+    def qaoa_callback(eval_count, parameters, mean, metadata):
+        print(f"[{date} QAOA] eval={eval_count:03d}, energy={mean:.6f}", flush=True)
+
+    if USE_AER:
         backend = AerSimulator(method="statevector")
-        transpiler = generate_preset_pass_manager(optimization_level=1, backend=backend)
+        sampler = AerSampler()
+        transpiler = generate_preset_pass_manager(
+            optimization_level=1,
+            backend=backend
+        )
+
+        print(
+            "使用 qiskit_aer.primitives.SamplerV2 + AerSimulator transpiler",
+            flush=True
+        )
+
         qaoa = QAOA(
-            sampler=Sampler(),
-            optimizer=COBYLA(maxiter=200),
+            sampler=sampler,
+            optimizer=COBYLA(maxiter=30),
             reps=1,
+            callback=qaoa_callback,
             transpiler=transpiler
         )
     else:
-        qaoa = QAOA(sampler=Sampler(), optimizer=COBYLA(maxiter=200), reps=1)
-    
-    # 使用 MinimumEigenOptimizer 包裝 QAOA 來解 QUBO
-    optimizer = MinimumEigenOptimizer(qaoa)
-    
-    print("⏳ QAOA 量子演算法運算中 (這會模擬量子態的演化，請稍候約 10~30 秒)...\n")
+        sampler = AerSampler()
+
+        print("使用 qiskit.primitives.StatevectorSampler", flush=True)
+
+        qaoa = QAOA(
+            sampler=sampler,
+            optimizer=COBYLA(maxiter=5),
+            reps=1,
+            callback=qaoa_callback
+        )
+
+    return MinimumEigenOptimizer(qaoa)
+
+
+def solve_for_date(target_date, mu_data, sigma_data):
+    print(f"載入調倉日: {target_date} 之參數...", flush=True)
+
+    mu, sigma = build_inputs_for_date(target_date, mu_data, sigma_data, ASSETS)
+
+    qubo_model, assets = build_chip4_qubo(
+        mu=mu,
+        sigma=sigma,
+        lmbda=0.5,
+        p1=50.0,
+        p3=10.0
+    )
+
+    print("QUBO 模型轉換完畢", flush=True)
+    print(f"總變數數量: {qubo_model.get_num_vars()}", flush=True)
+    print(f"總限制式數量: {qubo_model.get_num_linear_constraints()}", flush=True)
+    print("", flush=True)
+
+    print("初始化 QAOA：reps=1, Aer COBYLA maxiter=30 / fallback maxiter=5", flush=True)
+    optimizer = build_qaoa_optimizer(target_date)
+
+    print("\n即將進入 optimizer.solve(qubo_model)...", flush=True)
     result = optimizer.solve(qubo_model)
-    
-    # ==========================================
-    # 解析結果
-    # ==========================================
-    print("==================================================")
-    print("🏆 QAOA 求解完成！")
-    
-    # 找出 QAOA 選中的股票
-    selected_indices = [i for i, val in enumerate(result.x[:15]) if val == 1.0]
+    print("optimizer.solve() 已完成。\n", flush=True)
+
+    selected_indices = [
+        i for i, value in enumerate(result.x[:len(ASSETS)])
+        if round(value) == 1
+    ]
     selected_tickers = [assets[i] for i in selected_indices]
-    
-    print(f"🎯 QAOA 找到之投資組合: {selected_tickers}")
-    print(f"⚡ QAOA 算出的能量值 (fval): {result.fval:.6f}")
-    
-    # 帶入您剛剛算出的 Brute Force 最佳能量值來算 Optimality Gap
-    # (請確認這個數字與您上一步 Brute Force 2026-04-08 的 Energy 一致)
-    brute_force_energy = 0.002657 
-    gap = abs(result.fval - brute_force_energy) / abs(brute_force_energy)
-    
-    print(f"📏 Optimality Gap (與全域最佳解差距): {gap * 100:.2f}%")
-    print("==================================================")
-    print("\n💡 註: 由於 QAOA 是啟發式演算法，如果能量值與 Brute Force 不同或跑出違規解，這正是我們要探討的「解品質落差」。")
+
+    original_energy, risk, expected_return, violations = calculate_original_energy(
+        selected_tickers=selected_tickers,
+        mu=mu,
+        sigma=sigma,
+        assets=assets,
+        lmbda=0.5,
+        p3=10.0
+    )
+
+    brute_force_energy = BRUTE_FORCE_ENERGY_BY_DATE.get(target_date)
+    gap = None
+    if brute_force_energy is not None and brute_force_energy != 0:
+        gap = abs(original_energy - brute_force_energy) / abs(brute_force_energy)
+
+    return {
+        "date": target_date,
+        "selected_tickers": selected_tickers,
+        "selected_count": len(selected_tickers),
+        "qaoa_qubo_fval": float(result.fval),
+        "original_energy": original_energy,
+        "brute_force_energy": brute_force_energy,
+        "optimality_gap": gap,
+        "expected_return": expected_return,
+        "risk": risk,
+        "dependency_violations": violations
+    }
+
+
+def print_result(result):
+    print("==================================================", flush=True)
+    print("QAOA 求解完成", flush=True)
+    print(f"調倉日: {result['date']}", flush=True)
+    print(f"QAOA 找到之投資組合: {result['selected_tickers']}", flush=True)
+    print(f"選股數量: {result['selected_count']}", flush=True)
+    print("", flush=True)
+    print(f"QAOA QUBO fval: {result['qaoa_qubo_fval']:.6f}", flush=True)
+    print(f"重新代回原始目標函數 Energy: {result['original_energy']:.6f}", flush=True)
+    if result["brute_force_energy"] is None:
+        print("Brute Force Energy: 尚未提供此日期資料", flush=True)
+        print("Optimality Gap: N/A", flush=True)
+    else:
+        print(f"Brute Force Energy: {result['brute_force_energy']:.6f}", flush=True)
+        print(f"Optimality Gap: {result['optimality_gap'] * 100:.2f}%", flush=True)
+    print("", flush=True)
+    print(f"預期投組報酬: {result['expected_return'] * 100:.4f}%", flush=True)
+    print(f"投組變異數: {result['risk']:.8f}", flush=True)
+    print(f"供應鏈違規次數: {result['dependency_violations']}", flush=True)
+    print("==================================================", flush=True)
+
+
+def save_results(results, csv_path="qaoa_results_all_dates.csv", json_path="qaoa_results_all_dates.json"):
+    fieldnames = [
+        "date",
+        "selected_tickers",
+        "selected_count",
+        "qaoa_qubo_fval",
+        "original_energy",
+        "brute_force_energy",
+        "optimality_gap",
+        "expected_return",
+        "risk",
+        "dependency_violations"
+    ]
+
+    csv_rows = []
+    for result in results:
+        row = result.copy()
+        row["selected_tickers"] = ", ".join(row["selected_tickers"])
+        csv_rows.append(row)
+
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+
+    print(f"\n五天 QAOA 結果已儲存為: {csv_path} / {json_path}", flush=True)
+
+
+def print_summary_table(results):
+    print("\n" + "=" * 100, flush=True)
+    print("五個事件日 QAOA 求解結果總表", flush=True)
+    print("=" * 100, flush=True)
+    print(
+        f"{'Date':<12} {'Count':>5} {'Energy':>12} {'Return':>12} {'Risk':>12}  Selected Tickers",
+        flush=True
+    )
+    print("-" * 100, flush=True)
+    for result in results:
+        tickers = ", ".join(result["selected_tickers"])
+        print(
+            f"{result['date']:<12} "
+            f"{result['selected_count']:>5} "
+            f"{result['original_energy']:>12.6f} "
+            f"{result['expected_return'] * 100:>11.4f}% "
+            f"{result['risk']:>12.8f}  "
+            f"{tickers}",
+            flush=True
+        )
+    print("=" * 100, flush=True)
+
+
+def main():
+    print("=== 啟動 IBM Qiskit QAOA 量子求解引擎 ===\n", flush=True)
+
+    mu_data = load_json_data("lstm_predicted_mu.json")
+    sigma_data = load_json_data("sigma_matrices.json")
+
+    results = []
+    for target_date in TARGET_DATES:
+        try:
+            result = solve_for_date(target_date, mu_data, sigma_data)
+        except ValueError as exc:
+            print(f"輸入資料錯誤：{exc}", flush=True)
+            continue
+
+        results.append(result)
+        print_result(result)
+
+    if results:
+        print_summary_table(results)
+        save_results(results)
+
+    print(
+        "\n註：QUBO fval 含限制式懲罰項，論文比較建議使用「重新代回原始目標函數 Energy」與 Brute Force Energy 比較。",
+        flush=True
+    )
+
 
 if __name__ == "__main__":
     main()

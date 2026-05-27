@@ -1,0 +1,93 @@
+[
+  {
+    "date": "2019-05-13",
+    "selected_tickers": [
+      "ASML",
+      "3711.TW",
+      "6488.TWO",
+      "4063.T",
+      "000660.KS",
+      "042700.KS"
+    ],
+    "selected_count": 6,
+    "qaoa_qubo_fval": 50.00485021145562,
+    "original_energy": 0.004850211455599034,
+    "brute_force_energy": -0.024647691792737625,
+    "optimality_gap": 1.1967815686914802,
+    "expected_return": -0.004810797079699114,
+    "risk": 0.0048896258314989555,
+    "dependency_violations": 0
+  },
+  {
+    "date": "2019-06-19",
+    "selected_tickers": [
+      "QCOM",
+      "2454.TW",
+      "6488.TWO",
+      "6857.T",
+      "005930.KS"
+    ],
+    "selected_count": 5,
+    "qaoa_qubo_fval": -0.007833811953389613,
+    "original_energy": -0.007833811953372419,
+    "brute_force_energy": -0.007833811953372419,
+    "optimality_gap": 0.0,
+    "expected_return": 0.02164826449006796,
+    "risk": 0.005980640583323123,
+    "dependency_violations": 0
+  },
+  {
+    "date": "2019-06-24",
+    "selected_tickers": [
+      "2454.TW",
+      "6488.TWO",
+      "6857.T",
+      "000660.KS",
+      "042700.KS"
+    ],
+    "selected_count": 5,
+    "qaoa_qubo_fval": 99.9960042297165,
+    "original_energy": -0.003995770283496201,
+    "brute_force_energy": -0.01249175895072697,
+    "optimality_gap": 0.6801274905113612,
+    "expected_return": 0.014190663758199662,
+    "risk": 0.006199123191207259,
+    "dependency_violations": 0
+  },
+  {
+    "date": "2020-03-04",
+    "selected_tickers": [
+      "QCOM",
+      "2454.TW",
+      "6488.TWO",
+      "8035.T",
+      "000660.KS"
+    ],
+    "selected_count": 5,
+    "qaoa_qubo_fval": -0.0017725014022289542,
+    "original_energy": -0.0017725014022497996,
+    "brute_force_energy": -0.004361821255456643,
+    "optimality_gap": 0.5936327285231144,
+    "expected_return": 0.00920947507256642,
+    "risk": 0.005664472268066821,
+    "dependency_violations": 0
+  },
+  {
+    "date": "2026-04-08",
+    "selected_tickers": [
+      "QCOM",
+      "3711.TW",
+      "6488.TWO",
+      "4063.T",
+      "005930.KS"
+    ],
+    "selected_count": 5,
+    "qaoa_qubo_fval": 0.008159788720945471,
+    "original_energy": 0.008159788720961968,
+    "brute_force_energy": 0.0012550100272338948,
+    "optimality_gap": 5.501771734004829,
+    "expected_return": -0.0005333697044989094,
+    "risk": 0.015786207737425027,
+    "dependency_violations": 0
+  }
+]

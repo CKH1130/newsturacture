@@ -17,7 +17,7 @@ def download_adj_close(tickers, start_date, end_date):
         auto_adjust=False,
         progress=False,
         group_by="column",
-        threads=True
+        threads=False
     )
 
     if df.empty:
