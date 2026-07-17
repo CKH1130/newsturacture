@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore')
 # ==========================================
 # 🚨 API Token 設定
 # ==========================================
-IBM_TOKEN = "FaV2d_HRZJkUyS3YNshouymB9SLXSeyMcn_iwDWGwTPa"
+IBM_TOKEN = "fKDFFQqzS4QK09QvZEdRVZjP0QHRfAIBDCseLJzoewqs"
 
 ASSETS = [
     "NVDA", "AMD", "QCOM", "AMAT", "ASML",
