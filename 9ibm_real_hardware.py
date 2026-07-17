@@ -3,9 +3,6 @@ import warnings
 import numpy as np
 from qiskit_optimization import QuadraticProgram
 from qiskit_optimization.converters import QuadraticProgramToQubo
-from qiskit_optimization.algorithms import MinimumEigenOptimizer
-from qiskit_algorithms import QAOA
-from qiskit_algorithms.optimizers import COBYLA
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit.circuit.library import QAOAAnsatz
@@ -15,7 +12,7 @@ warnings.filterwarnings('ignore')
 # ==========================================
 # 🚨 API Token 設定
 # ==========================================
-IBM_TOKEN = "H_WAXccyKeF2jBNcAx_4dcnQLl9Ucf0DiWxFF_7uXO6R"
+IBM_TOKEN = "FaV2d_HRZJkUyS3YNshouymB9SLXSeyMcn_iwDWGwTPa"
 
 ASSETS = [
     "NVDA", "AMD", "QCOM", "AMAT", "ASML",
@@ -33,29 +30,41 @@ def build_qubo_model(mu, sigma):
     quadratic = {(ASSETS[i], ASSETS[j]): 0.5 * sigma[i][j] for i in range(15) for j in range(15)}
     qp.minimize(linear=linear, quadratic=quadratic)
     
-    # 基本與區域約束
-    qp.linear_constraint(linear={a: 1 for a in ASSETS}, sense='==', rhs=5)
+    # 🚨 修正 1：總持股數改為 4
+    qp.linear_constraint(linear={a: 1 for a in ASSETS}, sense='==', rhs=4)
     mkt_assets = {
         "US": ["NVDA", "AMD", "QCOM", "AMAT", "ASML"],
         "TW": ["2330.TW", "2454.TW", "3711.TW", "6488.TWO"],
         "JP": ["8035.T", "6857.T", "4063.T"],
         "KR": ["005930.KS", "000660.KS", "042700.KS"]
     }
-    markets = {"US": 1, "TW": 2, "JP": 1, "KR": 1}
+    # 🚨 修正 2：台灣市場配額改為 1
+    markets = {"US": 1, "TW": 1, "JP": 1, "KR": 1}
     for mkt, req in markets.items():
         qp.linear_constraint(linear={t: 1 for t in mkt_assets[mkt]}, sense='==', rhs=req)
         
     # 處理供應鏈相依性 (Penalty Logic)
     obj = qp.objective
     for dep, relies_on in [("NVDA", "2330.TW"), ("AMD", "2330.TW"), ("2330.TW", "ASML")]:
-        # 修正：使用字典索引方式存取，避免 AttributeError
         obj.linear[dep] += 10
         obj.quadratic[dep, relies_on] -= 10
 
     return QuadraticProgramToQubo(penalty=100).convert(qp)
 
+def calculate_original_energy(selected_tickers, mu, sigma, lmbda=0.5):
+    """將真機選出的股票代回原始目標函數，計算乾淨的財務 Energy"""
+    x = np.zeros(len(ASSETS))
+    for ticker in selected_tickers:
+        if ticker in ASSETS:
+            idx = ASSETS.index(ticker)
+            x[idx] = 1
+
+    risk = float(x.T @ sigma @ x)
+    expected_return = float(np.dot(mu, x))
+    return lmbda * risk - (1 - lmbda) * expected_return
+
 def main():
-    print("=== 🚀 連線至 IBM Quantum 真實量子硬體 ===\n")
+    print("=== 🚀 連線至 IBM Quantum 真實量子電腦===\n")
     
     # 帳號驗證與連線
     print("🔑 正在驗證 IBM Token...")
@@ -63,7 +72,6 @@ def main():
     service = QiskitRuntimeService()
     backend = service.least_busy(operational=True, simulator=False, min_num_qubits=15)
     
-    # --- 關鍵修正：在這裡初始化 sampler ---
     sampler = Sampler(mode=backend)
     print(f"✅ 成功連線！已鎖定真實量子電腦: {backend.name} (Qubits: {backend.num_qubits})\n")
 
@@ -74,8 +82,8 @@ def main():
     except FileNotFoundError:
         print("❌ 錯誤：找不到數據檔案 (json)，請確認檔案路徑。")
         return
-    #,"2019-06-19","2019-06-24","2020-03-04", "2026-04-08"
-    target_dates = ["2019-05-13","2019-06-19","2019-06-24","2020-03-04","2026-04-08"]
+        
+    target_dates = ["2019-05-13","2019-06-19","2019-06-24","2020-03-04","2026-04-27"]
 
     for date in target_dates:
         print(f"==========================================")
@@ -84,7 +92,7 @@ def main():
         if date not in mu_data: continue
 
         mu = [mu_data[date][k] for k in ASSETS]
-        sigma = sigma_data[date]
+        sigma = np.array(sigma_data[date])
         
         # 1. 建構模型與 Ising 算符
         qubo_model = build_qubo_model(mu, sigma)
@@ -100,16 +108,14 @@ def main():
         try:
             print(f"📡 正在發送 ISA 指令至 {backend.name} (15 Qubits)...")
             initial_theta = [0.1] * ansatz.num_parameters
-            # 發送一次任務即可
             job = sampler.run([(isa_circuit, initial_theta)])
             print(f"🆔 Job ID: {job.job_id()}")
             
-            # --- 核心優化：監控排隊狀態 ---
+            # --- 監控排隊狀態 ---
             import time
             print("⏳ 任務已進入 IBM 系統，正在監控進度...")
             while True:
                 status = job.status()
-                # 兼容處理 status 為字串或物件的情況
                 status_name = status.name if hasattr(status, 'name') else str(status)
                 
                 if status_name == 'DONE':
@@ -118,11 +124,10 @@ def main():
                 elif status_name in ['FAILED', 'CANCELLED', 'ERROR']:
                     raise RuntimeError(f"IBM 任務異常終止，狀態: {status_name}")
                 else:
-                    # 每 30 秒更新一次狀態，避免畫面死掉
                     print(f"   [目前狀態]: {status_name} (請耐心等待...)", end='\r')
                     time.sleep(30)
-            # ---------------------------
-
+            
+            # --- 結果處理 ---
             result = job.result() 
             pub_result = result[0]
             
@@ -144,10 +149,14 @@ def main():
             
             qaoa_selected = [ASSETS[i] for i, val in enumerate(x_sample) if val == 1]
             
+            # 🚨 修正 3：還原真機選股結果的真實財務 Energy
+            real_energy = calculate_original_energy(qaoa_selected, mu, sigma)
+            
             print(f"\n🏆 【真機結果回傳成功】")
             print(f"🎯 調倉日: {date}")
             print(f"🎯 選定投資組合: {qaoa_selected}")
-            print(f"⚡ 真機計算之能量值 (fval): {fval:.6f}")
+            print(f"⚡ 真機計算之能量值 (含懲罰 fval): {fval:.6f}")
+            print(f"💰 還原真實財務 Energy: {real_energy:.6f}")
             print(f"🆔 Job ID: {job.job_id()}")
             
         except Exception as e:

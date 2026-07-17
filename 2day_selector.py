@@ -109,7 +109,7 @@ def main():
         else:
             print(f"✅ {category}: {date}")
     
-    print("\n(註：此 5 個日期將寫死於論文中，作為後續所有演算法 (Brute Force, SA, QAOA) 的共同測試基準。)")
+    print("\n(註：此 5 個日期將寫死於論文中，作為後續所有演算法 (Brute Force, QAOA) 的共同測試基準。)")
 
 if __name__ == "__main__":
     import warnings

@@ -4,7 +4,6 @@ import os
 from datetime import datetime
 
 import pandas as pd
-import yfinance as yf
 
 
 def download_adj_close(tickers, start_date, end_date):
@@ -95,7 +94,7 @@ def main():
     all_tickers = asset_tickers + fx_tickers
 
     start_date = "2019-01-01"
-    end_date = datetime.today().strftime("%Y-%m-%d")
+    end_date = "2026-04-30"
 
     print(f"[Step 1] 下載期間：{start_date} ~ {end_date}")
 

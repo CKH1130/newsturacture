@@ -13,7 +13,7 @@ TARGET_DATES = [
     "2019-06-19",
     "2019-06-24",
     "2020-03-04",
-    "2026-04-08",
+    "2026-04-27",
 ]
 
 BACKTEST_FILE = Path("backtest_metrics_all_dates.csv")

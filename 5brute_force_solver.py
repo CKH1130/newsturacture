@@ -40,7 +40,6 @@ def build_inputs_for_date(date, mu_data, sigma_data, assets):
 def main():
     print("=== 啟動古典暴力破解引擎 (Brute Force Exact Solver) ===\n")
     
-    # 1. 讀取我們辛苦萃取出來的真實數據
     try:
         mu_data = load_json_data("lstm_predicted_mu.json")
         sigma_data = load_json_data("sigma_matrices.json")
@@ -69,29 +68,25 @@ def main():
     lmbda = 0.5
     p3 = 10.0
     
-    # 我們要測試的 5 個代表日
     target_dates = [
         "2019-05-13", "2019-06-19", "2019-06-24", 
-        "2020-03-04", "2026-04-08"
+        "2020-03-04", "2026-04-27"
     ]
     
     print(f"👉 參數設定: λ = {lmbda}, P3 = {p3}")
-    print("👉 開始窮舉 C(15, 5) = 3003 種組合...\n")
+    print("👉 開始窮舉 C(15, 4) = 1365 種組合...\n")
     
-    # 針對每一個代表日進行暴力破解
     for date in target_dates:
         if date not in mu_data or date not in sigma_data:
             print(f"跳過 {date}，缺乏數據。")
             continue
             
-        # 將 JSON 的數據轉回 Numpy 格式，並防止 NaN 讓最佳解永遠無法更新
         try:
             mu, sigma = build_inputs_for_date(date, mu_data, sigma_data, assets)
         except ValueError as exc:
             print("==================================================")
             print(f"📅 調倉日: {date}")
             print(f"❌ 跳過：輸入資料無效，{exc}")
-            print("   請重新執行 3lstm_predictor.py 與 4covariance_extractor.py 產生乾淨 JSON。")
             print("==================================================\n")
             continue
         
@@ -100,24 +95,24 @@ def main():
         best_details = {}
         feasible_count = 0
         
-        # 產生所有 15 選 5 的組合 (回傳的是 index 的 tuple)
-        all_combinations = list(itertools.combinations(range(15), 5))
+        # 產生所有 15 選 4 的組合 (C(15,4) = 1365)
+        all_combinations = list(itertools.combinations(range(15), 4))
         
         for combo in all_combinations:
-            # 建立二元向量 x (選中為1，未選為0)
             x = np.zeros(15)
             x[list(combo)] = 1
             
             selected_tickers = [assets[i] for i in combo]
             
-            # --- 檢查硬限制 (P2: 市場配置 2,1,1,1) ---
+            # --- 檢查硬限制 (P2: 市場配置 1,1,1,1) ---
             us_count = sum(1 for t in selected_tickers if t in market_mapping["US"])
             tw_count = sum(1 for t in selected_tickers if t in market_mapping["TW"])
             jp_count = sum(1 for t in selected_tickers if t in market_mapping["JP"])
             kr_count = sum(1 for t in selected_tickers if t in market_mapping["KR"])
             
-            if not (tw_count == 2 and us_count == 1 and jp_count == 1 and kr_count == 1):
-                continue # 不符合市場配置，直接淘汰 (等同於 P2 給了無限大的懲罰)
+            # 市場配額改為 1,1,1,1 的絕對對稱
+            if not (tw_count == 1 and us_count == 1 and jp_count == 1 and kr_count == 1):
+                continue 
             feasible_count += 1
                 
             # --- 計算目標函數 (Energy) ---
@@ -134,12 +129,10 @@ def main():
             
             h_dep = p3 * penalty_violations
             
-            # 總能量 (越低越好)
             total_energy = h_rr + h_dep
             if not np.isfinite(total_energy):
                 continue
             
-            # 更新最佳解
             if total_energy < best_energy:
                 best_energy = total_energy
                 best_portfolio = selected_tickers
@@ -157,7 +150,6 @@ def main():
             print("==================================================\n")
             continue
 
-        # 印出該日期的最佳解答
         print(f"🏆 絕對最佳解 (Energy: {best_energy:.6f})")
         print(f"💼 投資組合: {best_portfolio}")
         print(f"📊 預期投組報酬(無加權): {best_details['Return']*100:.2f}% | 投組變異數: {best_details['Risk']:.6f}")

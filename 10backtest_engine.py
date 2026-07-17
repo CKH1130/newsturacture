@@ -12,8 +12,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 # === 參數設定 ===
-# 設定回測期間 (調倉日後 21 個交易日，約 1 個月)
-OOS_DAYS = 21 
+# 對應新版論文 3.8 節，調倉日後 20 個交易日
+OOS_DAYS = 20 
 RISK_FREE_RATE = 0.02  # 假設年化無風險利率 2%
 
 # 全體 15 檔候選標的
@@ -24,36 +24,39 @@ ASSETS = [
     "005930.KS", "000660.KS", "042700.KS"
 ]
 
+# 移除 SA，對齊論文表 3-2 的對照組名稱
 PLOT_STYLES = {
-    "SA/BF (古典絕對最佳)": {"color": "#1f77b4", "marker": "o", "linestyle": "-", "linewidth": 2.5},
-    "QAOA (IBM真機/硬體雜訊)": {"color": "#d62728", "marker": "s", "linestyle": "--", "linewidth": 2.5},
+    "Brute Force (全域絕對最佳)": {"color": "#1f77b4", "marker": "o", "linestyle": "-", "linewidth": 2.5},
+    "QAOA (IBM 真實量子電腦)": {"color": "#d62728", "marker": "s", "linestyle": "--", "linewidth": 2.5},
 }
 
-# === 投資組合輸入區 (請替換為您各階段選出的真實名單) ===
-# 版本 A：不放 Benchmark，聚焦求解器之間的樣本外績效比較
-portfolios_20190513 = {  # 極端大跌日
-    "SA/BF (古典絕對最佳)": ['ASML', '2454.TW', '6488.TWO', '6857.T', '000660.KS'],
-    "QAOA (IBM真機/硬體雜訊)": ['AMAT', '6488.TWO', '042700.KS']
+# === 投資組合輸入區 ===
+# 🚨 修正 3：這裡的範例已改為符合 K=4 與 (1,1,1,1) 配置。
+# ⚠️ 請務必替換為您執行 Script 5 (Brute Force) 與 Script 9 (IBM QAOA) 產出的真實名單！
+這邊重跑之後要更改
+portfolios_20190513 =   {
+    "Brute Force (全域絕對最佳)": ['QCOM', '6488.TWO', '8035.T', '000660.KS'],
+    "QAOA (IBM 真實量子電腦)": ['AMD', '6488.TWO', '4063.T', '042700.KS']
 }
 
-portfolios_20190619 = {  # 極端大漲日
-    "SA/BF (古典絕對最佳)": ['ASML', '2330.TW', '3711.TW', '6857.T'],
-    "QAOA (IBM真機/硬體雜訊)": ['AMD', 'QCOM', '8035.T', '4063.T']
+portfolios_20190619 = {  
+    "Brute Force (全域絕對最佳)": ['QCOM', '6488.TWO', '4063.T', '005930.KS'],
+    "QAOA (IBM 真實量子電腦)": ['QCOM', '3711.TW', '6857.T', '042700.KS']
 }
 
-portfolios_20190624 = {  # 平穩日
-    "SA/BF (古典絕對最佳)": ['ASML', '2330.TW', '3711.TW', '4063.T', '042700.KS'],
-    "QAOA (IBM真機/硬體雜訊)": ['NVDA', 'AMD', 'QCOM', 'ASML', '6488.TWO', '6857.T', '042700.KS']
+portfolios_20190624 = {  
+    "Brute Force (全域絕對最佳)": ['QCOM', '6488.TWO', '4063.T', '042700.KS'],
+    "QAOA (IBM 真實量子電腦)": ['NVDA', '6488.TWO', '8035.T', '000660.KS']
 }
 
-portfolios_20200304 = {  # 高波動日
-    "SA/BF (古典絕對最佳)": ['2454.TW', '6488.TWO', '6857.T', '042700.KS'],
-    "QAOA (IBM真機/硬體雜訊)": ['AMD', '3711.TW', '8035.T', '4063.T', '005930.KS']
+portfolios_20200304 = {  
+    "Brute Force (全域絕對最佳)": ['ASML', '2454.TW', '6857.T', '042700.KS'],
+    "QAOA (IBM 真實量子電腦)": ['ASML', '3711.TW', '4063.T', '042700.KS']
 }
 
-portfolios_20260408 = {
-    "SA/BF (古典絕對最佳)": ['AMD', '2330.TW', '6488.TWO', '8035.T', '4063.T', '005930.KS'],
-    "QAOA (IBM真機/硬體雜訊)": ['3711.TW', '6857.T'] # 替換成您真機的結果
+portfolios_20260427 = {
+    "Brute Force (全域絕對最佳)": ['QCOM', '6488.TWO', '8035.T', '005930.KS'],
+    "QAOA (IBM 真實量子電腦)": ['AMD', '6488.TWO', '6857.T', '000660.KS'] 
 }
 
 target_dates = {
@@ -61,24 +64,17 @@ target_dates = {
     "2019-06-19": portfolios_20190619,  # 極端大漲日
     "2019-06-24": portfolios_20190624,  # 平穩日
     "2020-03-04": portfolios_20200304,  # 高波動日
-    "2026-04-08": portfolios_20260408   # 事件衝擊日
+    "2026-04-27": portfolios_20260427   # 事件衝擊日
 }
 
 def calculate_metrics(daily_returns, portfolio_name):
     """計算學術級財務績效指標"""
     # 累積報酬率
     cum_return = (1 + daily_returns).prod() - 1
-    
-    # 年化報酬率 (假設一年 252 個交易日)
     ann_return = daily_returns.mean() * 252
-    
-    # 年化波動率
     ann_vol = daily_returns.std() * np.sqrt(252)
-    
-    # 夏普值 (Sharpe Ratio)
     sharpe_ratio = (ann_return - RISK_FREE_RATE) / ann_vol if ann_vol != 0 else 0
     
-    # 最大回撤 (Maximum Drawdown, MDD)
     cum_wealth = (1 + daily_returns).cumprod()
     peak = cum_wealth.cummax()
     drawdown = (cum_wealth - peak) / peak
@@ -94,7 +90,7 @@ def calculate_metrics(daily_returns, portfolio_name):
     }
 
 def format_markdown_table(headers, rows):
-    """不依賴 tabulate 的簡易 Markdown 表格輸出。"""
+    """簡易 Markdown 表格輸出"""
     if not rows:
         return "無資料"
 
@@ -120,7 +116,6 @@ def format_markdown_table(headers, rows):
 def main():
     print("=== 🚀 啟動樣本外財務績效回測引擎 (Out-of-sample Backtester) ===\n")
     
-    # 1. 讀取歷史日報酬率資料
     try:
         df_returns = pd.read_csv("chip4_usd_returns.csv", index_col='Date', parse_dates=True)
     except FileNotFoundError:
@@ -129,13 +124,12 @@ def main():
 
     all_metrics = []
 
-    # 2. 針對每個調倉日進行回測
     for target_date_str, portfolios in target_dates.items():
         print(f"📅 正在執行調倉日: {target_date_str} 之回測 (期間: 往後 {OOS_DAYS} 個交易日)")
         
         target_date = pd.to_datetime(target_date_str)
         
-        # 篩選樣本外 (Out-of-sample) 期間資料
+        # 篩選樣本外期間資料
         oos_data = df_returns.loc[target_date:].iloc[1:OOS_DAYS+1] 
         
         if len(oos_data) == 0:
@@ -145,25 +139,22 @@ def main():
         metrics_list = []
         plt.figure(figsize=(10, 6))
         
-        # 3. 計算各投資組合績效與畫圖
         for name, tickers in portfolios.items():
-            # 確保選出的股票都在資料內
             valid_tickers = [t for t in tickers if t in oos_data.columns]
             if not valid_tickers:
                 print(f"⚠️ 警告: {name} 沒有可用 ticker，已跳過。")
                 continue
             
-            # 計算等權重每日報酬率 (Daily returns of equal-weighted portfolio)
+            # 等權重每日報酬率
             port_daily_return = oos_data[valid_tickers].mean(axis=1)
             
-            # 算指標
             metrics = calculate_metrics(port_daily_return, name)
             metrics["Date"] = target_date_str
             metrics_list.append(metrics)
             all_metrics.append(metrics)
             
-            # 畫累積報酬走勢圖
-            cum_wealth = (1 + port_daily_return).cumprod() * 100 # 基期 100
+            # 畫圖
+            cum_wealth = (1 + port_daily_return).cumprod() * 100 
             style = PLOT_STYLES.get(name, {"linewidth": 2.5})
             plt.plot(
                 cum_wealth.index,
@@ -176,11 +167,9 @@ def main():
 
         if not metrics_list:
             plt.close()
-            print(f"⚠️ 警告: {target_date_str} 沒有任何可回測的投資組合，請先填入 portfolios。")
             continue
         
-        # === 畫圖設定 (符合論文格式) ===
-        plt.title(f"Solver Portfolio Out-of-sample Cumulative Wealth (Rebalance Date: {target_date_str})", fontsize=14, fontweight='bold')
+        plt.title(f"Out-of-sample Cumulative Wealth (Rebalance Date: {target_date_str})", fontsize=14, fontweight='bold')
         plt.xlabel("Date", fontsize=12)
         plt.ylabel("Cumulative Wealth (Base = 100)", fontsize=12)
         plt.legend(loc="best", fontsize=10)
@@ -188,16 +177,14 @@ def main():
         plt.xticks(rotation=45)
         plt.tight_layout()
         
-        # 存檔圖片
         img_name = f"backtest_plot_{target_date_str}.png"
         plt.savefig(img_name, dpi=300)
         plt.close()
         print(f"📉 走勢圖已儲存為: {img_name}")
         
-        # === 印出表格 (可直接貼入論文表三) ===
         df_metrics = pd.DataFrame(metrics_list)
         print("\n" + "="*80)
-        print(f"📋 表三：各求解器投資組合之樣本外財務績效比較 (基準日: {target_date_str})")
+        print(f"📋 各求解器投資組合之樣本外財務績效比較 (基準日: {target_date_str})")
         print("="*80)
         print(format_markdown_table(df_metrics.columns.tolist(), df_metrics.values.tolist()))
         print("="*80 + "\n")
