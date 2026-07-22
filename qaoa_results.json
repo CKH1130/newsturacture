@@ -2,137 +2,145 @@
     {
         "Date": "2019-05-13",
         "Category": "極端大跌日",
-        "BF_Energy": -0.008963104931680154,
-        "Ideal_Energy": 0.004318166150342148,
-        "Ideal_QUBO_Fval": 0.004318166150369507,
-        "Ideal_Gap": 1.48177123700511,
+        "BF_Energy": -0.008885115673327875,
+        "Ideal_Energy": -0.003401416879263866,
+        "Ideal_QUBO_Fval": null,
+        "Ideal_Gap": 0.6171780982576807,
+        "Ideal_Selected": [
+            "QCOM",
+            "3711.TW",
+            "6857.T",
+            "000660.KS"
+        ],
+        "Ideal_Violations": 0,
+        "Ideal_Probability": null,
+        "Ideal_Source": "projected_from_qaoa",
+        "Ideal_HammingDistance": 2,
+        "Ideal_Time": 2.014810800552368,
+        "Noisy_Energy": -0.004811545064566154,
+        "Noisy_QUBO_Fval": null,
+        "Noisy_Gap": 0.4584713084816808,
+        "Noisy_Selected": [
+            "QCOM",
+            "6488.TWO",
+            "6857.T",
+            "042700.KS"
+        ],
+        "Noisy_Violations": 0,
+        "Noisy_Probability": null,
+        "Noisy_Source": "projected_from_qaoa",
+        "Noisy_HammingDistance": 2,
+        "Noisy_Time": 182.53310894966125
+    },
+    {
+        "Date": "2019-06-19",
+        "Category": "極端大漲日",
+        "BF_Energy": -0.004405288849000655,
+        "Ideal_Energy": 0.00030419853764478795,
+        "Ideal_QUBO_Fval": 0.00030419853783314466,
+        "Ideal_Gap": 1.069053028773311,
         "Ideal_Selected": [
             "ASML",
+            "6488.TWO",
+            "4063.T",
+            "042700.KS"
+        ],
+        "Ideal_Violations": 0,
+        "Ideal_Probability": 3.814697265625e-06,
+        "Ideal_Source": "qaoa_feasible_sample",
+        "Ideal_HammingDistance": null,
+        "Ideal_Time": 1.504812479019165,
+        "Noisy_Energy": -0.0010481237018951251,
+        "Noisy_QUBO_Fval": null,
+        "Noisy_Gap": 0.7620760549826617,
+        "Noisy_Selected": [
+            "ASML",
             "2330.TW",
+            "4063.T",
+            "005930.KS"
+        ],
+        "Noisy_Violations": 0,
+        "Noisy_Probability": null,
+        "Noisy_Source": "projected_from_qaoa",
+        "Noisy_HammingDistance": 1,
+        "Noisy_Time": 199.40283942222595
+    },
+    {
+        "Date": "2019-06-24",
+        "Category": "平穩日",
+        "BF_Energy": -0.023808556030230594,
+        "Ideal_Energy": -0.018224132353758804,
+        "Ideal_QUBO_Fval": 9.98177586764632,
+        "Ideal_Gap": 0.23455532831898931,
+        "Ideal_Selected": [
+            "QCOM",
+            "3711.TW",
             "8035.T",
             "042700.KS"
         ],
         "Ideal_Violations": 0,
-        "Ideal_Probability": 8.58306884765625e-06,
+        "Ideal_Probability": 3.814697265625e-06,
         "Ideal_Source": "qaoa_feasible_sample",
         "Ideal_HammingDistance": null,
-        "Noisy_Energy": 0.007613301054749806,
+        "Ideal_Time": 1.5503432750701904,
+        "Noisy_Energy": -0.010211819231223314,
         "Noisy_QUBO_Fval": null,
-        "Noisy_Gap": 1.8494044321449974,
+        "Noisy_Gap": 0.5710861583433706,
         "Noisy_Selected": [
-            "AMAT",
-            "6488.TWO",
-            "6857.T",
+            "ASML",
+            "2330.TW",
+            "4063.T",
             "000660.KS"
         ],
         "Noisy_Violations": 0,
         "Noisy_Probability": null,
         "Noisy_Source": "projected_from_qaoa",
-        "Noisy_HammingDistance": 2
+        "Noisy_HammingDistance": 1,
+        "Noisy_Time": 198.70469212532043
     },
     {
-        "Date": "2019-06-19",
-        "Category": "極端大漲日",
-        "BF_Energy": -0.004405620869143234,
-        "Ideal_Energy": -0.003174399594301951,
+        "Date": "2020-03-04",
+        "Category": "高波動日",
+        "BF_Energy": -0.006645079357310615,
+        "Ideal_Energy": -0.0011472569770650679,
         "Ideal_QUBO_Fval": null,
-        "Ideal_Gap": 0.27946600749617384,
+        "Ideal_Gap": 0.8273524038801873,
         "Ideal_Selected": [
-            "QCOM",
+            "AMAT",
             "3711.TW",
-            "4063.T",
-            "042700.KS"
+            "6857.T",
+            "000660.KS"
         ],
         "Ideal_Violations": 0,
         "Ideal_Probability": null,
         "Ideal_Source": "projected_from_qaoa",
         "Ideal_HammingDistance": 1,
-        "Noisy_Energy": -0.003995261653873048,
+        "Ideal_Time": 1.5891802310943604,
+        "Noisy_Energy": -0.004780484046272696,
         "Noisy_QUBO_Fval": null,
-        "Noisy_Gap": 0.093144468727285,
-        "Noisy_Selected": [
-            "QCOM",
-            "6488.TWO",
-            "4063.T",
-            "042700.KS"
-        ],
-        "Noisy_Violations": 0,
-        "Noisy_Probability": null,
-        "Noisy_Source": "projected_from_qaoa",
-        "Noisy_HammingDistance": 4
-    },
-    {
-        "Date": "2019-06-24",
-        "Category": "平穩日",
-        "BF_Energy": -0.023783433060706405,
-        "Ideal_Energy": -0.01864991718701135,
-        "Ideal_QUBO_Fval": null,
-        "Ideal_Gap": 0.21584419123143117,
-        "Ideal_Selected": [
-            "QCOM",
-            "6488.TWO",
-            "8035.T",
-            "042700.KS"
-        ],
-        "Ideal_Violations": 0,
-        "Ideal_Probability": null,
-        "Ideal_Source": "projected_from_qaoa",
-        "Ideal_HammingDistance": 2,
-        "Noisy_Energy": -0.01916531732151961,
-        "Noisy_QUBO_Fval": null,
-        "Noisy_Gap": 0.19417363874253185,
-        "Noisy_Selected": [
-            "QCOM",
-            "6488.TWO",
-            "4063.T",
-            "005930.KS"
-        ],
-        "Noisy_Violations": 0,
-        "Noisy_Probability": null,
-        "Noisy_Source": "projected_from_qaoa",
-        "Noisy_HammingDistance": 2
-    },
-    {
-        "Date": "2020-03-04",
-        "Category": "高波動日",
-        "BF_Energy": -0.007080348297187735,
-        "Ideal_Energy": 0.00032124451803110243,
-        "Ideal_QUBO_Fval": 0.0003212445178633061,
-        "Ideal_Gap": 1.045371287477298,
-        "Ideal_Selected": [
-            "AMAT",
-            "3711.TW",
-            "8035.T",
-            "005930.KS"
-        ],
-        "Ideal_Violations": 0,
-        "Ideal_Probability": 8.58306884765625e-06,
-        "Ideal_Source": "qaoa_feasible_sample",
-        "Ideal_HammingDistance": null,
-        "Noisy_Energy": -0.005119842182429425,
-        "Noisy_QUBO_Fval": null,
-        "Noisy_Gap": 0.2768940216595007,
+        "Noisy_Gap": 0.280597899705528,
         "Noisy_Selected": [
             "ASML",
-            "3711.TW",
+            "2330.TW",
             "6857.T",
-            "005930.KS"
+            "042700.KS"
         ],
         "Noisy_Violations": 0,
         "Noisy_Probability": null,
         "Noisy_Source": "projected_from_qaoa",
-        "Noisy_HammingDistance": 2
+        "Noisy_HammingDistance": 2,
+        "Noisy_Time": 233.80979323387146
     },
     {
         "Date": "2026-04-27",
         "Category": "事件衝擊日",
-        "BF_Energy": -0.014976771811019461,
-        "Ideal_Energy": -0.012586482401799682,
+        "BF_Energy": -0.013661909063249664,
+        "Ideal_Energy": -0.01150813269539026,
         "Ideal_QUBO_Fval": null,
-        "Ideal_Gap": 0.1595997748634373,
+        "Ideal_Gap": 0.15764827286495642,
         "Ideal_Selected": [
             "ASML",
-            "2454.TW",
+            "6488.TWO",
             "8035.T",
             "000660.KS"
         ],
@@ -140,9 +148,10 @@
         "Ideal_Probability": null,
         "Ideal_Source": "projected_from_qaoa",
         "Ideal_HammingDistance": 2,
-        "Noisy_Energy": -0.012879515053445317,
+        "Ideal_Time": 1.667743444442749,
+        "Noisy_Energy": -0.011194142299175203,
         "Noisy_QUBO_Fval": null,
-        "Noisy_Gap": 0.140033966200316,
+        "Noisy_Gap": 0.18063118065342113,
         "Noisy_Selected": [
             "QCOM",
             "3711.TW",
@@ -152,6 +161,7 @@
         "Noisy_Violations": 0,
         "Noisy_Probability": null,
         "Noisy_Source": "projected_from_qaoa",
-        "Noisy_HammingDistance": 2
+        "Noisy_HammingDistance": 2,
+        "Noisy_Time": 205.69330739974976
     }
 ]

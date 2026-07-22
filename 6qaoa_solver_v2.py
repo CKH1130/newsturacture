@@ -1,6 +1,7 @@
 import json
 import itertools
 import numpy as np
+import time 
 from qiskit_optimization import QuadraticProgram
 from qiskit_optimization.converters import QuadraticProgramToQubo
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
@@ -81,7 +82,14 @@ def build_chip4_qubo(mu, sigma, lmbda=0.5, p1=100, p3=10):
         qp.linear_constraint(linear={t: 1 for t in tickers}, sense='==', rhs=req, name=f'Mkt_{mkt}')
         
     # 4. 供應鏈依賴懲罰 (P3)
-    dependencies = [("NVDA", "2330.TW"), ("AMD", "2330.TW"), ("2330.TW", "ASML")]
+    dependencies = [
+        ("NVDA", "2330.TW"),          # X_NVIDIA(1 - X_TSMC)
+        ("AMD", "2330.TW"),           # X_AMD(1 - X_TSMC)
+        ("QCOM", "2330.TW"),          # X_Qualcomm(1 - X_TSMC)
+        ("2330.TW", "ASML"),          # X_TSMC(1 - X_ASML)
+        ("2330.TW", "6488.TWO"),      # X_TSMC(1 - X_GlobalWafers) [環球晶]
+        ("005930.KS", "2330.TW")      # X_Samsung(1 - X_TSMC) [三星]
+    ]
     obj = qp.objective
     for dep, relies_on in dependencies:
         obj.linear[dep] += p3
@@ -99,7 +107,14 @@ def compute_brute_force_energy(mu, sigma, lmbda=0.5, p3=10):
         "JP": ["8035.T", "6857.T", "4063.T"],
         "KR": ["005930.KS", "000660.KS", "042700.KS"],
     }
-    dependencies = [("NVDA", "2330.TW"), ("AMD", "2330.TW"), ("2330.TW", "ASML")]
+    dependencies = [
+        ("NVDA", "2330.TW"),          # X_NVIDIA(1 - X_TSMC)
+        ("AMD", "2330.TW"),           # X_AMD(1 - X_TSMC)
+        ("QCOM", "2330.TW"),          # X_Qualcomm(1 - X_TSMC)
+        ("2330.TW", "ASML"),          # X_TSMC(1 - X_ASML)
+        ("2330.TW", "6488.TWO"),      # X_TSMC(1 - X_GlobalWafers) [環球晶]
+        ("005930.KS", "2330.TW")      # X_Samsung(1 - X_TSMC) [三星]
+    ]
 
     best_energy = float("inf")
     for combo in itertools.combinations(range(len(ASSETS)), 4):
@@ -141,7 +156,14 @@ def validate_portfolio(selected_tickers):
         count = sum(ticker in tickers for ticker in selected_tickers)
         violations += abs(count - required[mkt])
 
-    dependencies = [("NVDA", "2330.TW"), ("AMD", "2330.TW"), ("2330.TW", "ASML")]
+    dependencies = [
+        ("NVDA", "2330.TW"),          # X_NVIDIA(1 - X_TSMC)
+        ("AMD", "2330.TW"),           # X_AMD(1 - X_TSMC)
+        ("QCOM", "2330.TW"),          # X_Qualcomm(1 - X_TSMC)
+        ("2330.TW", "ASML"),          # X_TSMC(1 - X_ASML)
+        ("2330.TW", "6488.TWO"),      # X_TSMC(1 - X_GlobalWafers) [環球晶]
+        ("005930.KS", "2330.TW")      # X_Samsung(1 - X_TSMC) [三星]
+    ]
     violations += sum(
         1 for dep, relies_on in dependencies
         if dep in selected_tickers and relies_on not in selected_tickers
@@ -323,9 +345,14 @@ def solve_one_date(record, mu_data, sigma_data):
     }
 
     for mode, label in [("ideal", "Ideal"), ("noisy", "Noisy")]:
+        mode_start_time = time.time()  
+        
         optimizer = build_qaoa_optimizer(mode=mode)
         result = optimizer.solve(qubo_model)
         qaoa_choice = choose_best_qaoa_portfolio(result, assets, np.array(mu), np.array(sigma))
+        
+        mode_elapsed_time = time.time() - mode_start_time
+        
         selected_tickers = qaoa_choice["selected"]
         
         # 加上絕對值保護，避免除以零或符號錯誤
@@ -340,8 +367,9 @@ def solve_one_date(record, mu_data, sigma_data):
         results_dict[f"{label}_Probability"] = qaoa_choice["probability"]
         results_dict[f"{label}_Source"] = qaoa_choice["source"]
         results_dict[f"{label}_HammingDistance"] = qaoa_choice.get("hamming_distance")
+        results_dict[f"{label}_Time"] = float(mode_elapsed_time)
 
-        print(f"🏆 [{label}] QAOA 求解完成！", flush=True)
+        print(f"🏆 [{label}] QAOA 求解完成！ (耗時: {mode_elapsed_time:.2f} 秒)", flush=True)
         print(f"Gap: {gap * 100:.2f}%", flush=True)
         print(f"⚡ 原始目標能量值: {qaoa_choice['energy']:.6f}", flush=True)
         qubo_fval = qaoa_choice["qubo_fval"]
@@ -361,6 +389,8 @@ def format_value(value):
     return str(value) if value is not None else "skipped"
 
 def main():
+    total_start_time = time.time()
+    
     print("=== 啟動 IBM Qiskit QAOA 量子求解引擎 ===\n", flush=True)
     print("設定：K=4，市場配置 (US, TW, JP, KR) = (1, 1, 1, 1)。", flush=True)
     print(
@@ -403,15 +433,18 @@ def main():
             flush=True
         )
         print(
-            f"    Ideal Selected: {result['Ideal_Selected']}",
+            f"    Ideal Selected: {result['Ideal_Selected']} (耗時: {result['Ideal_Time']:.2f}s)",
             flush=True
         )
         print(
-            f"    Noisy Selected: {result['Noisy_Selected']}",
+            f"    Noisy Selected: {result['Noisy_Selected']} (耗時: {result['Noisy_Time']:.2f}s)",
             flush=True
         )
     print(f"\n已輸出完整 QAOA 結果：{QAOA_RESULTS_FILE}", flush=True)
     print("\n💡 註: 由於 QAOA 是啟發式演算法，如果能量值與 Brute Force 不同或跑出違規解，這正是我們要探討的「解品質落差」。", flush=True)
+    
+    total_elapsed_time = time.time() - total_start_time
+    print(f"\n⏱️ 程式總執行時間: {total_elapsed_time:.2f} 秒", flush=True)
 
 if __name__ == "__main__":
     main()

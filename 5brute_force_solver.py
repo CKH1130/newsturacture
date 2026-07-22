@@ -1,6 +1,8 @@
+import argparse
 import json
 import numpy as np
 import itertools
+import time
 
 ASSETS = [
     "NVDA", "AMD", "QCOM", "AMAT", "ASML",
@@ -37,7 +39,8 @@ def build_inputs_for_date(date, mu_data, sigma_data, assets):
 
     return mu, sigma
 
-def main():
+def main(previous_run_time=None):
+    total_start_time = time.time()  # 新增：記錄總程式開始時間
     print("=== 啟動古典暴力破解引擎 (Brute Force Exact Solver) ===\n")
     
     try:
@@ -59,9 +62,12 @@ def main():
     
     # 定義供應鏈依賴
     dependencies = [
-        ("NVDA", "2330.TW"),
-        ("AMD", "2330.TW"),
-        ("2330.TW", "ASML")
+        ("NVDA", "2330.TW"),          # X_NVIDIA(1 - X_TSMC)
+        ("AMD", "2330.TW"),           # X_AMD(1 - X_TSMC)
+        ("QCOM", "2330.TW"),          # X_Qualcomm(1 - X_TSMC)
+        ("2330.TW", "ASML"),          # X_TSMC(1 - X_ASML)
+        ("2330.TW", "6488.TWO"),      # X_TSMC(1 - X_GlobalWafers) [環球晶]
+        ("005930.KS", "2330.TW")      # X_Samsung(1 - X_TSMC) [三星]
     ]
     
     # 論文鎖定的參數
@@ -77,6 +83,7 @@ def main():
     print("👉 開始窮舉 C(15, 4) = 1365 種組合...\n")
     
     for date in target_dates:
+        date_start_time = time.time()
         if date not in mu_data or date not in sigma_data:
             print(f"跳過 {date}，缺乏數據。")
             continue
@@ -154,7 +161,24 @@ def main():
         print(f"💼 投資組合: {best_portfolio}")
         print(f"📊 預期投組報酬(無加權): {best_details['Return']*100:.2f}% | 投組變異數: {best_details['Risk']:.6f}")
         print(f"⚠️ 供應鏈違規次數: {best_details['Violations']}")
+        
+        date_end_time = time.time()
+        print(f"⏱️ 本日運算時間: {date_end_time - date_start_time:.6f} 秒")
         print("==================================================\n")
 
+    total_end_time = time.time()  # 新增：記錄總程式結束時間
+    print(f"⏱️ 總運算時間: {total_end_time - total_start_time:.6f} 秒")
+
+    if previous_run_time is not None:
+        print(f"↩️ 外部傳入先前運算時間: {previous_run_time:.6f} 秒")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Brute force solver with optional previous runtime injection")
+    parser.add_argument("--previous-run-time", type=float, default=None,
+                        help="先前已測量的運算時間（秒），會一併輸出到程式中")
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(previous_run_time=args.previous_run_time)

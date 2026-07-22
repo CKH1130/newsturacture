@@ -40,9 +40,12 @@ MARKETS = {
 }
 
 DEPENDENCIES = [
-    ("NVDA", "2330.TW"),
-    ("AMD", "2330.TW"),
-    ("2330.TW", "ASML"),
+    ("NVDA", "2330.TW"),          # X_NVIDIA(1 - X_TSMC)
+    ("AMD", "2330.TW"),          # X_AMD(1 - X_TSMC)
+    ("QCOM", "2330.TW"),          # X_Qualcomm(1 - X_TSMC)
+    ("2330.TW", "ASML"),          # X_TSMC(1 - X_ASML)
+    ("2330.TW", "6488.TWO"),      # X_TSMC(1 - X_GlobalWafers) [環球晶]
+    ("005930.KS", "2330.TW")      # X_Samsung(1 - X_TSMC) [三星]
 ]
 
 
@@ -64,8 +67,12 @@ def load_backtest_config():
     if missing:
         raise ValueError("投組資料缺少以下方法：" + ", ".join(missing))
 
+    # ✅ 新增：讀取第 10 段的運算耗時資料 (若無則預設為空字典)
+    execution_times = namespace.get("execution_times", {})
+
     return {
         "portfolios_data": portfolios_data,
+        "execution_times": execution_times,
         "oos_days": int(namespace.get("OOS_DAYS", 20)),
         "risk_free_rate": float(namespace.get("RISK_FREE_RATE", 0.02)),
     }
@@ -149,6 +156,9 @@ def build_daily_results(config, df_returns):
             metrics = calculate_metrics(daily_returns, config["risk_free_rate"])
             violations = validate_portfolio(selected_tickers)
 
+            # ✅ 抓取對應日期的運算耗時
+            exec_time = config["execution_times"].get(date_str, {}).get(method, "N/A")
+
             results.append(
                 {
                     "Date": date_str,
@@ -163,6 +173,7 @@ def build_daily_results(config, df_returns):
                     "Sharpe Ratio": format_number(metrics["sharpe_ratio"]),
                     "Violations": violations,
                     "Zero Violation": "Yes" if violations == 0 else "No",
+                    "Execution Time (s)": exec_time,  # ✅ 紀錄耗時
                     "_cumulative_return": metrics["cumulative_return"],
                     "_annual_volatility": metrics["annual_volatility"],
                     "_max_drawdown": metrics["max_drawdown"],
@@ -180,12 +191,14 @@ def build_wide_rows(results):
     }
     dates = sorted({row["Date"] for row in results})
 
+    # ✅ 指標清單加入「運算耗時 (秒)」
     metric_specs = [
         ("累積報酬率", lambda row: row["Cumulative Return"]),
         ("年化波動率", lambda row: row["Ann. Volatility"]),
         ("最大回撤", lambda row: row["Max Drawdown"]),
         ("夏普值", lambda row: row["Sharpe Ratio"]),
         ("零違規", lambda row: format_zero_violation(row["Violations"])),
+        ("運算耗時 (秒)", lambda row: str(row["Execution Time (s)"])),  # ✅ 呈現運算耗時
     ]
 
     wide_rows = []
@@ -229,6 +242,7 @@ def write_outputs(results, wide_rows):
         "Sharpe Ratio",
         "Violations",
         "Zero Violation",
+        "Execution Time (s)",  # ✅ 加入導出的 CSV 欄位
     ]
     pd.DataFrame(results)[public_columns].to_csv(
         SUMMARY_CSV_FILE,
